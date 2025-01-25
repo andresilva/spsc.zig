@@ -1,6 +1,7 @@
 const std = @import("std");
 const thread = @import("thread.zig");
 
+const AtomicRing = @import("atomic.zig").Ring;
 const MutexRing = @import("mutex.zig").Ring;
 
 const stdout = std.io.getStdOut().writer();
@@ -80,4 +81,14 @@ fn benchmark(opts: Benchmark) !void {
 
 pub fn main() !void {
     try benchmark(.{ .type = MutexRing(u64, 32) });
+    try benchmark(.{ .type = AtomicRing(u64, 32) });
+
+    try benchmark(.{ .type = MutexRing(u64, 128) });
+    try benchmark(.{ .type = AtomicRing(u64, 128) });
+
+    try benchmark(.{ .type = MutexRing(u64, 512) });
+    try benchmark(.{ .type = AtomicRing(u64, 512) });
+
+    try benchmark(.{ .type = MutexRing(u64, 2048) });
+    try benchmark(.{ .type = AtomicRing(u64, 2048) });
 }

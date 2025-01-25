@@ -56,7 +56,7 @@ fn consumer(queue: anytype, end: *std.time.Instant, warmup: usize, ops: usize) v
 
 const Benchmark = struct {
     type: type,
-    ops: usize = 100_000_000,
+    ops: usize = 1_000_000_000,
 };
 
 fn benchmark(opts: Benchmark) !void {

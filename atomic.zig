@@ -6,15 +6,19 @@ pub fn Ring(comptime T: type, cap: usize) type {
         // NOTE: indices are aligned to cache line to avoid false sharing
         head: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
         tail: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
+        cached_head: usize align(std.atomic.cache_line) = 0,
+        cached_tail: usize align(std.atomic.cache_line) = 0,
 
         pub const capacity = cap;
 
         pub fn enqueue(self: *@This(), t: T) bool {
             const head = self.head.load(.unordered);
-            const tail = self.tail.load(.acquire);
 
-            if (head - tail == capacity) {
-                return false;
+            if (head - self.cached_tail == capacity) {
+                self.cached_tail = self.tail.load(.acquire);
+                if (head - self.cached_tail == capacity) {
+                    return false;
+                }
             }
 
             self.items[head % capacity] = t;
@@ -24,11 +28,13 @@ pub fn Ring(comptime T: type, cap: usize) type {
         }
 
         pub fn dequeue(self: *@This()) ?T {
-            const head = self.head.load(.acquire);
             const tail = self.tail.load(.unordered);
 
-            if (head - tail == 0) {
-                return null;
+            if (self.cached_head - tail == 0) {
+                self.cached_head = self.head.load(.acquire);
+                if (self.cached_head - tail == 0) {
+                    return null;
+                }
             }
 
             const t = self.items[tail % capacity];

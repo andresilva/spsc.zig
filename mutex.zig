@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub fn Ring(comptime T: type, cap: usize) type {
     return struct {
-        items: [cap]T = undefined,
+        items: [capacity]T = undefined,
         head_index: usize = 0,
         tail_index: usize = 0,
         mutex: std.Thread.Mutex = .{},

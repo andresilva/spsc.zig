@@ -2,14 +2,15 @@ const std = @import("std");
 
 pub fn Ring(comptime T: type, cap: usize) type {
     return struct {
-        items: [cap]T = undefined,
+        items: [capacity]T = undefined,
         // NOTE: indices are aligned to cache line to avoid false sharing
         head: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
         tail: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
         cached_head: usize align(std.atomic.cache_line) = 0,
         cached_tail: usize align(std.atomic.cache_line) = 0,
 
-        pub const capacity = cap;
+        pub const capacity = std.math.ceilPowerOfTwoAssert(usize, cap);
+        pub const mask = capacity - 1;
 
         pub fn enqueue(self: *@This(), t: T) bool {
             const head = self.head.load(.unordered);
@@ -21,8 +22,8 @@ pub fn Ring(comptime T: type, cap: usize) type {
                 }
             }
 
-            self.items[head % capacity] = t;
-            self.head.store(head + 1, .release);
+            self.items[head & mask] = t;
+            self.head.store(head +% 1, .release);
 
             return true;
         }
@@ -30,21 +31,21 @@ pub fn Ring(comptime T: type, cap: usize) type {
         pub fn dequeue(self: *@This()) ?T {
             const tail = self.tail.load(.unordered);
 
-            if (self.cached_head - tail == 0) {
+            if (self.cached_head == tail) {
                 self.cached_head = self.head.load(.acquire);
-                if (self.cached_head - tail == 0) {
+                if (self.cached_head == tail) {
                     return null;
                 }
             }
 
-            const t = self.items[tail % capacity];
-            self.tail.store(tail + 1, .release);
+            const t = self.items[tail & mask];
+            self.tail.store(tail +% 1, .release);
 
             return t;
         }
 
         pub fn isEmpty(self: *@This()) bool {
-            return self.head.load(.seq_cst) - self.tail.load(.seq_cst) == 0;
+            return self.head.load(.seq_cst) == self.tail.load(.seq_cst);
         }
     };
 }

@@ -9,33 +9,35 @@ pub fn Ring(comptime T: type, cap: usize) type {
         pub const capacity = cap;
 
         pub fn enqueue(self: *@This(), t: T) bool {
-            if (self.len() == capacity) {
+            const head = self.head.load(.unordered);
+            const tail = self.tail.load(.acquire);
+
+            if (head - tail == capacity) {
                 return false;
             }
 
-            self.items[self.head.load(.seq_cst) % capacity] = t;
-            _ = self.head.fetchAdd(1, .seq_cst);
+            self.items[head % capacity] = t;
+            self.head.store(head + 1, .release);
 
             return true;
         }
 
         pub fn dequeue(self: *@This()) ?T {
-            if (self.len() == 0) {
+            const head = self.head.load(.acquire);
+            const tail = self.tail.load(.unordered);
+
+            if (head - tail == 0) {
                 return null;
             }
 
-            const t = self.items[self.tail.load(.seq_cst) % capacity];
-            _ = self.tail.fetchAdd(1, .seq_cst);
+            const t = self.items[tail % capacity];
+            self.tail.store(tail + 1, .release);
 
             return t;
         }
 
-        fn len(self: *@This()) usize {
-            return self.head.load(.seq_cst) - self.tail.load(.seq_cst);
-        }
-
         pub fn isEmpty(self: *@This()) bool {
-            return self.len() == 0;
+            return self.head.load(.seq_cst) - self.tail.load(.seq_cst) == 0;
         }
     };
 }

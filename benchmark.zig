@@ -1,9 +1,13 @@
 const std = @import("std");
+const thread = @import("thread.zig");
+
 const MutexRing = @import("mutex.zig").Ring;
 
 const stdout = std.io.getStdOut().writer();
 
 fn producer(queue: anytype, start: *std.time.Instant, warmup: usize, ops: usize) void {
+    thread.setAffinity(1);
+
     // warmup
     for (0..warmup) |i| {
         while (!queue.enqueue(i)) {}
@@ -21,6 +25,8 @@ fn producer(queue: anytype, start: *std.time.Instant, warmup: usize, ops: usize)
 }
 
 fn consumer(queue: anytype, end: *std.time.Instant, warmup: usize, ops: usize) void {
+    thread.setAffinity(2);
+
     // warm up
     for (0..warmup) |i| {
         while (true) {
@@ -53,6 +59,8 @@ const Benchmark = struct {
 };
 
 fn benchmark(opts: Benchmark) !void {
+    thread.setAffinity(0);
+
     const warmup = opts.type.capacity * 4;
     var queue = opts.type{};
 

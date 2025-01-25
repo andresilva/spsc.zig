@@ -1,11 +1,7 @@
 const std = @import("std");
 
-const NOOP = false;
-
 // Set the affinity of the current thread to the given CPU.
 pub fn setAffinity(cpu: usize) void {
-    if (NOOP) return;
-
     var cpu_set: std.os.linux.cpu_set_t = undefined;
     @memset(&cpu_set, 0);
 

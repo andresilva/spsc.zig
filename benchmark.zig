@@ -6,8 +6,8 @@ const MutexRing = @import("mutex.zig").Ring;
 
 const stdout = std.io.getStdOut().writer();
 
-fn producer(queue: anytype, start: *std.time.Instant, warmup: usize, ops: usize) void {
-    thread.setAffinity(1);
+fn producer(queue: anytype, start: *std.time.Instant, cpu: ?usize, warmup: usize, ops: usize) void {
+    if (cpu) |c| thread.setAffinity(c);
 
     // warmup
     for (0..warmup) |i| {
@@ -25,8 +25,8 @@ fn producer(queue: anytype, start: *std.time.Instant, warmup: usize, ops: usize)
     }
 }
 
-fn consumer(queue: anytype, end: *std.time.Instant, warmup: usize, ops: usize) void {
-    thread.setAffinity(2);
+fn consumer(queue: anytype, end: *std.time.Instant, cpu: ?usize, warmup: usize, ops: usize) void {
+    if (cpu) |c| thread.setAffinity(c);
 
     // warm up
     for (0..warmup) |i| {
@@ -57,10 +57,11 @@ fn consumer(queue: anytype, end: *std.time.Instant, warmup: usize, ops: usize) v
 const Benchmark = struct {
     type: type,
     ops: usize = 1_000_000_000,
+    cpus: ?[2]usize = null,
 };
 
 fn benchmark(opts: Benchmark) !void {
-    thread.setAffinity(0);
+    if (opts.cpus) |_| thread.setAffinity(0);
 
     const warmup = opts.type.capacity * 4;
     var queue = opts.type{};
@@ -68,8 +69,8 @@ fn benchmark(opts: Benchmark) !void {
     var start: std.time.Instant = undefined;
     var end: std.time.Instant = undefined;
 
-    var p = try std.Thread.spawn(.{}, producer, .{ &queue, &start, warmup, opts.ops });
-    var c = try std.Thread.spawn(.{}, consumer, .{ &queue, &end, warmup, opts.ops });
+    var p = try std.Thread.spawn(.{}, producer, .{ &queue, &start, if (opts.cpus) |cpus| cpus[0] else null, warmup, opts.ops });
+    var c = try std.Thread.spawn(.{}, consumer, .{ &queue, &end, if (opts.cpus) |cpus| cpus[1] else null, warmup, opts.ops });
 
     p.join();
     c.join();
@@ -80,15 +81,48 @@ fn benchmark(opts: Benchmark) !void {
 }
 
 pub fn main() !void {
-    try benchmark(.{ .type = MutexRing(u64, 32) });
-    try benchmark(.{ .type = AtomicRing(u64, 32) });
+    const sizes = [_]comptime_int{
+        8,
+        16,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024,
+        2048,
+        4096,
+    };
 
-    try benchmark(.{ .type = MutexRing(u64, 128) });
-    try benchmark(.{ .type = AtomicRing(u64, 128) });
+    // This is based on AMD Ryzen 9 5950X
+    const cpus = .{
+        .{
+            "no affinity",
+            null,
+        },
+        .{
+            "same smt",
+            .{ 1, 17 },
+        },
+        .{
+            "same ccd",
+            .{ 1, 2 },
+        },
+        .{
+            "different ccd",
+            .{ 1, 8 },
+        },
+    };
 
-    try benchmark(.{ .type = MutexRing(u64, 512) });
-    try benchmark(.{ .type = AtomicRing(u64, 512) });
+    inline for (cpus) |c| {
+        try stdout.print("=======================================\n", .{});
+        try stdout.print("topology: {s}, cpus: {any}\n", .{ c[0], c[1] });
+        try stdout.print("=======================================\n\n", .{});
 
-    try benchmark(.{ .type = MutexRing(u64, 2048) });
-    try benchmark(.{ .type = AtomicRing(u64, 2048) });
+        inline for (sizes) |size| {
+            try benchmark(.{ .type = MutexRing(u64, size), .cpus = c[1] });
+            try benchmark(.{ .type = AtomicRing(u64, size), .cpus = c[1] });
+            try stdout.print("\n", .{});
+        }
+    }
 }

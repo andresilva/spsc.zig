@@ -3,8 +3,9 @@ const std = @import("std");
 pub fn Ring(comptime T: type, cap: usize) type {
     return struct {
         items: [cap]T = undefined,
-        head: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
-        tail: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
+        // NOTE: indices are aligned to cache line to avoid false sharing
+        head: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
+        tail: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
 
         pub const capacity = cap;
 

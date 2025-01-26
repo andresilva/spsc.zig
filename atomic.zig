@@ -18,17 +18,17 @@ pub fn Ring(comptime T: type, cap: usize) type {
 
         pub const capacity = cap;
 
-        pub fn enqueue(self: *@This(), t: T) bool {
+        pub fn enqueue(self: *@This(), item: T) bool {
             const head = self.head.load(.unordered);
 
-            if (isFull(head, self.cached_tail)) {
+            if (full(head, self.cached_tail)) {
                 self.cached_tail = self.tail.load(.acquire);
-                if (isFull(head, self.cached_tail)) {
+                if (full(head, self.cached_tail)) {
                     return false;
                 }
             }
 
-            self.items[head] = t;
+            self.items[head] = item;
 
             if (head == capacity) {
                 self.head.store(0, .release);
@@ -37,16 +37,6 @@ pub fn Ring(comptime T: type, cap: usize) type {
             }
 
             return true;
-        }
-
-        fn isFull(head: usize, tail: usize) bool {
-            if (head < tail) {
-                return head == tail - 1;
-            } else if (tail < head) {
-                return tail == head - capacity;
-            } else {
-                return false;
-            }
         }
 
         pub fn dequeue(self: *@This()) ?T {
@@ -59,7 +49,7 @@ pub fn Ring(comptime T: type, cap: usize) type {
                 }
             }
 
-            const t = self.items[tail];
+            const item = self.items[tail];
 
             if (tail == capacity) {
                 self.tail.store(0, .release);
@@ -67,11 +57,25 @@ pub fn Ring(comptime T: type, cap: usize) type {
                 self.tail.store(tail + 1, .release);
             }
 
-            return t;
+            return item;
         }
 
         pub fn isEmpty(self: *@This()) bool {
             return self.head.load(.unordered) == self.tail.load(.unordered);
+        }
+
+        pub fn isFull(self: *@This()) bool {
+            return full(self.head.load(.unordered), self.tail.load(.unordered));
+        }
+
+        fn full(head: usize, tail: usize) bool {
+            if (head < tail) {
+                return head == tail - 1;
+            } else if (tail < head) {
+                return tail == head - capacity;
+            } else {
+                return false;
+            }
         }
     };
 }

@@ -2,12 +2,16 @@ const std = @import("std");
 
 pub fn Ring(comptime T: type, cap: usize) type {
     return struct {
-        items: [capacity]T = undefined,
-        // NOTE: indices are aligned to cache line to avoid false sharing
+        // NOTE: all fields aligned to cache line to avoid false sharing
+        items: [capacity]T align(std.atomic.cache_line) = undefined,
         head: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
         tail: std.atomic.Value(usize) align(std.atomic.cache_line) = std.atomic.Value(usize).init(0),
         cached_head: usize align(std.atomic.cache_line) = 0,
         cached_tail: usize align(std.atomic.cache_line) = 0,
+
+        comptime {
+            std.debug.assert(@alignOf(@This()) == std.atomic.cache_line);
+        }
 
         pub const capacity = std.math.ceilPowerOfTwoAssert(usize, cap);
         pub const mask = capacity - 1;
